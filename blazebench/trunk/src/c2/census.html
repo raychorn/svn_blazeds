@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+
+<!--
+Copyright (C) 2007 James Ward
+http://www.jamesward.org
+
+Updated, Alex Russell, 2008
+http://alex.dojotoolkit.org
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+-->
+<html>
+<head>
+	<title>Census 2 - RIA Data Loading Benchmarks</title>
+	<link rel="stylesheet" href="resources/main.css" type="text/css">
+	<link rel="stylesheet" href="dojo/dojo/resources/dojo.css" type="text/css">
+	<link rel="stylesheet" href="dojo/dijit/themes/dijit.css" type="text/css">
+	<link rel="stylesheet" href="dojo/dijit/themes/tundra/tundra.css" type="text/css">
+	<link rel="stylesheet" href="resources/census.css" type="text/css">
+	<style type="text/css">
+	</style>
+	<!-- grab the core of Dojo -->
+	<script src="dojo/dojo/dojo.js" language="javascript"
+		djConfig="parseOnLoad: true"></script>
+	<!--
+		the census.js layer file includes nearly all of the dependencies for
+		this page, making most of the following require() statements simple
+		formalities (and no-ops)
+	-->
+	<script src="dojo/dojo/census.js" language="javascript"></script>
+	<script type="text/javascript">
+		// dojo dependencies
+		dojo.require("dijit.dijit");
+		dojo.require("dijit.layout.ContentPane");
+		dojo.require("dijit.layout.BorderContainer");
+		dojo.require("dijit.layout.TabContainer");
+		dojo.require("dijit.form.CheckBox");
+		dojo.require("dijit.form.Button");
+		dojo.require("dojox.widget.Iterator");
+		dojo.require("dojox.charting.Chart2D");
+		dojo.require("dojox.charting.widget.Legend");
+		dojo.require("dojox.charting.action2d.Tooltip");
+		dojo.require("dojox.lang.functional.sequence");
+		dojo.require("dojox.charting.Theme");
+		dojo.require("dijit.ProgressBar");
+		dojo.require("dojox.dtl");
+		dojo.require("dojox.dtl.tag.logic");
+		dojo.require("dojox.dtl.filter.misc");
+		dojo.require("dojox.dtl.filter.logic");
+		dojo.require("dojox.dtl.Context");
+		dojo.require("dijit.form.NumberSpinner");
+
+		$ = dojo.query;
+		dojo.extend(dojo.NodeList, {
+			html: function(content, loc){
+				if(!arguments.length){
+					// getter
+					return this.map("return item.innerHTML");
+				}
+				// setter
+				this.empty();
+				this.addContent(content, loc);
+			},
+			xhr: function(url){
+				var t = this;
+				dojo.xhrGet({
+					url: url,
+					load: function(d){
+						t.html(d);
+					}
+				});
+			}
+		});
+
+		// TODO:
+		//		* finish the "guided" pane
+		//		* theme buttons and drop-downs
+
+		// color groups:
+		colorGroups = [
+			[ "#e28741", "#c6691c" ],
+			[ "#467299", "#2a547a" ],
+			[ "#f6c54c", "#d8a62d" ],
+			[ "#ff3f20", "#c92719" ],
+			[ "#44aa77", "#339966", "#246d49" ],
+			[ "#dd0000", "#990000", "#6d0000" ] // memory
+		];
+
+
+		// define a new theme based on our color group
+		DarkHorse = new dojox.charting.Theme({
+			chart: { fill: "transparent" },
+			plotarea: { fill: "#151515" },
+			axis: {
+				stroke:	{ //	the axis itself
+					color: "#111111", width: 1
+				},
+				fontColor: "#a9a9a9",
+				font: "normal normal normal 11px HelveticaNeue-Light",
+				fill: "#a9a9a9"
+			},
+			colors: dojo.map(colorGroups, "return item[0];")
+		});
+
+		sum = function(list){
+			var s = 0;
+			dojo.forEach(list, function(i){ s += i; });
+			return s;
+		}
+		mean = function(list, property){
+			if(!list.length){ return 0; }
+			return (sum(dojo.map(list, function(i){ return i[property]||0; }))/list.length); 
+		}
+
+		// a quick class to describe test items. Items in the global "testList"
+		// are instances of this class
+		dojo.declare("Test", null, {
+			constructor: function(/*Object?*/ item){
+				this.averages = dojo.delegate(Test.prototype.averages);
+				if(item){
+					dojo.mixin(this, item);
+				}
+				this.testInit();
+			},
+
+			//	name: String
+			//		the short name of the test
+			name: "",
+			//	file: String
+			//		the name of the file to load to execute the test
+			file: "",
+			//	desc: String
+			//		sentence length description of the test
+			desc: "",
+			//	disabled: Boolean
+			//		should the test be included in the visual list of tests and/or run?
+			disabled: false,
+			//	testCount: Integer
+			//		how many times to run a given test
+			testCount: 5, 
+			//	timeout: Integer
+			//		Time (in ms) to wait before declaring a test failed and
+			//		moving on. Thirty seconds is the default timeout.
+			timeout: 30000,
+			//	rowCount: Integer
+			//		number of rows to fetch or emulate fetching
+			rowCount: 5000,
+
+			// test averages
+			averages: {
+				serverExecTime: 0,
+				transferTime: 0,
+				parseTime: 0,
+				renderTime: 0,
+				bandwidth: 0,
+				total: 0
+			},
+
+			testInit: function(){
+				//	summary:
+				//		initialize a test run, clearing out old test data, etc.
+				this._results = [];
+			},
+			report: function(/*Object*/ properties){
+				//	summary:
+				//		report back about the currently executing test with
+				//		timing and size data. The fields in "properties" should
+				//		all be Number valued and the key should correspond to
+				//		those in "averages"
+				this._killFlightTimer();
+				// add our results to the list and re-generate the averages
+				this._results.push(properties);
+				if(this._currentlyRunning){
+					this._currentlyRunning.callback(properties);
+				}
+				// calculate the current running averages
+				var dataItems = this._results.slice(0);
+				if(this._results.length > 2){
+					// if we have enough items to discard the outliners, do it
+
+					// omit the outliers
+					dataItems = this.sortedResults().slice(1, -1);
+				}
+				for(var x in this.averages){
+					// update the averages
+					this.averages[x] = parseInt(mean(dataItems, x));
+				};
+			},
+
+			sortedResults: function(){
+				// order by lowest to highest execution time
+				return this._results.slice(0).sort(function(a, b){ a.total - b.total; });
+			},
+
+			addTests: function(/*Array*/ list){
+				//	summary:
+				//		add Deferred objects representing one test run for each
+				//		of the iterations specified in `this.testCount`. Each
+				//		Deferred is chained to the result callback of the
+				//		previous one in the list.
+				dojo.forEach((new Array(testCount||this.testCount)), function(i, idx){
+					// the list will always have at least a head Deferred
+					var last = list[list.length-1];
+					var def = new dojo.Deferred();
+					var runner = dojo.hitch(this, function(){
+						this._killFlightTimer();
+						this._killRunning();
+						this._currentlyRunning = def;
+						this._doTestRun();
+					});
+					last.addBoth(function(){
+						setTimeout(runner, 500); // let it breathe
+					});
+					list.push(def);
+				}, this);
+			},
+
+
+			// private properties and methods
+
+			_results: [],
+			_currentlyRunning: null,
+
+			_inFlightTests: [],
+			_flightTimer: null,
+			_doTestRun: function(){
+				$("#testContent").attr("src", this.file+"?"+dojo.objectToQuery({
+					rows: (rowCount||this.rowCount)
+				}));
+			},
+			_killFlightTimer: function(){
+				if(this._inFlightTimer){
+					clearTimeout(this._inFlightTimer);
+					this._inFlightTimer = null;
+				}
+			},
+			_killRunning: function(){
+				if(this._currentlyRunning){
+					if(this._currentlyRunning.fired < 0){
+						this._currentlyRunning.errback(false);
+					}
+				}
+			}
+		});
+
+		testsByFile = function(f){
+			return dojo.filter(testList, function(t){ return f == t.file; });
+		}
+
+		runSelected = function(all){
+			var items = all ? tests.children :
+				dojo.filter(tests.children, "return item.checkbox.checked;");
+			if(!testList){ return; } // FIXME: report to user!
+			runTests(
+				dojo.filter(
+					dojo.filter(testList, function(t){
+						return dojo.some(items, function(i){ return i.file == t.file; });
+					}),
+					function(i){ return !i.disabled; }
+				).reverse()
+			);
+		}
+
+		runTest = function(f){
+			runTests(testsByFile(f));
+		}
+
+		runTests = function(tests){
+			//	summary:
+			//		runs each test in the list sequentially, hooking up the
+			//		progress bar updates and finalization code. Returns a
+			//		Deferred object which calls back once all the tests have
+			//		been run.
+			var first = new dojo.Deferred();
+			var ret = new dojo.Deferred();
+			var tl = [ first ];
+			// NOTE:
+			//		tests actually register themselves. We drive their
+			//		"testInit" and "addTests" methods externally, passing in the
+			//		current list of tests to be added to.
+			dojo.forEach(tests, function(t){
+				t.testInit();
+				t.addTests(tl);
+			});
+			progress.update({
+				"progress": 0,
+				maximum: tl.length
+			});
+			dojo.forEach(tl, function(t, idx){
+				t.addBoth(function(e){
+					progress.update({
+						"progress": idx+1
+					});
+					return e;
+				});
+			});
+			var last = tl[tl.length-1];
+			last.addBoth(testsDone);
+			last.addCallback(ret, "callback");
+			last.addErrback(ret, "errback");
+			first.callback(true);
+			return ret; // dojo.Deferred
+		}
+
+		// stub to connect to
+		testsDone = function(e){ return e; }
+
+		reportResults = function(file, properties){
+			if(!testList){ return; }
+			if(!properties){ return; }
+			var tl = dojo.filter(testList, function(i){ return i.file == file; });
+			if(!tl.length){
+				console.debug("no matching test registered for:", file);
+			}
+			dojo.forEach(tl, function(t){ t.report(properties); });
+			chartPane.updateCharts();
+			dataPane.updateGrid();
+		}
+
+		testCount = 5;
+		rowCount = 5000;
+		testList = null;
+
+		perfChart = null;
+		perfLegend = null;
+		bandChart = null,
+		bandLegend = null;
+		totalTimeChart = null;
+		totalTimeLegend = null;
+
+		setTestList = function(list){
+			try{
+			list = dojo.map(list, "return new Test(item);");
+			tests.onDataAvailable(list);
+
+			// upgrade the items in the list to hold slots for their data:
+			testList = list.reverse();
+
+			// visual axis configurations shared between the bandwidth and
+			// timing charts
+
+			var getTimeLabel = function(num){
+				num = parseInt(num);
+				var txt = num+"ms";
+				if(num >= 1000){ txt = (num/1000)+"s"; }
+				if(num >= 60000){
+					// FIXME: minute formatting here!
+				}
+				return txt;
+			};
+
+			var getDataLabel = dojox.dtl.filter.misc.filesizeformat;
+
+			var xAxisConfig = {
+				majorLabels: true, 
+				minorLabels: true, 
+				includeZero: true, 
+				minorTicks: true, 
+				microTicks: false, 
+				htmlLabels: true,
+				fixUpper: "minor", fixLower: "minor", 
+				minorTick: { length: 3, color: "black" },
+				majorTick: { length: 3 }
+			};
+
+			var yAxisConfig = {
+				vertical: true,  // this is the vertical axis
+				fixLower: "none", // don't make space at the bottom
+				fixUpper: "none", // ...or the top of the graph
+				natural: true,
+				majorTickStep: 1, // show all the labels
+				htmlLabels: true, // and use HTML to do it so we get the right fonts and such
+				includeZero: false, // don't include the 0th item 
+				majorTick: { length: 0 }, // and squelch those unsightly tick marks
+				minorTick: { length: 0 }, // and squelch those unsightly tick marks
+				labels: dojo.map(testList, "return { value: index+1, text: item.name };")
+			};
+
+
+			// create and configure the initial charts
+			perfChart = new dojox.charting.Chart2D("perfChartNode").
+				setTheme(DarkHorse).
+				addAxis("x", dojo.delegate(xAxisConfig, { 
+					majorTickStep: 5000, // show every 10s
+					minorTickStep: 100, // show every 500ms if that makes sense
+					maxLabelSize: 50,
+					labelFunc: getTimeLabel
+				})).
+				addAxis("y", yAxisConfig).
+				addPlot("default", { 
+					type: "StackedBars", 
+					minBarSize: 3,
+					maxBarSize: 3,
+					gap: 3
+				}).
+				addSeries(
+					"Server Exec Time", 
+					dojo.map(testList, "return item.averages.serverExecTime;"),
+					{ stroke: { width: 0 } }
+				).
+				addSeries(
+					"Transfer Time", 
+					dojo.map(testList, "return item.averages.transferTime;"),
+					{ stroke: { width: 0 } }
+				).
+				addSeries(
+					"Parse Time", 
+					dojo.map(testList, "return item.averages.parseTime;"),
+					{ stroke: { width: 0 } }
+				).
+				addSeries(
+					"Render Time", 
+					dojo.map(testList, "return item.averages.renderTime;"),
+					{ stroke: { width: 0 } }
+				).
+			render();
+
+			new dojox.charting.action2d.Tooltip(perfChart, "default", {
+				text: function(o){ 
+					var item = testList[o.index];
+					var a = item.averages;
+					var ctx = new dojox.dtl.Context({
+						items: [
+							{ name: "Server Exec Time", time: getTimeLabel(a.serverExecTime) },
+							{ name: "Transfer Time", time: getTimeLabel(a.transferTime) },
+							{ name: "Parse Time", time: getTimeLabel(a.parseTime) },
+							{ name: "Render Time", time: getTimeLabel(a.renderTime) }
+						]
+					});
+					var tmpl = new dojox.dtl.Template([
+						"<table>{% for k in items %}",
+							"<tr>",
+								"<td style='text-align: right;'>{{ k.name }} :</td>",
+								"<td style='text-align: right; font-weight: bold;'>{{ k.time }}</td>",
+							"</tr>",
+						"{% endfor %}</table>"
+					].join(""));
+					return tmpl.render(ctx);
+				}
+			});
+
+			/*
+			var chartHeight = 300;
+			// hack for gradients
+			var run = chart.runs[name];
+			var group = run.group;
+			dojo.forEach(group.children, function(rect){
+				var bbox = rect.getBoundingBox();
+				// set your gradient using absolute coordinates
+				rect.setFill({
+					type: "linear",
+					x1: 0, y1: 0,
+					x2: 0, y2: chartHeight,
+					colors: [
+						{ color: "#e28741", offset: 0 },
+						{ color: "#c6691c", offset: 1 }
+					]
+				});
+			});
+			*/
+
+
+			perfLegend = new dojox.charting.widget.Legend({ chart: perfChart }, "perfLegendNode");
+
+			bandChart = new dojox.charting.Chart2D("bandChartNode").
+				setTheme(DarkHorse).
+				addAxis("y", yAxisConfig).
+				addAxis("x", dojo.delegate(xAxisConfig, { 
+					majorTickStep: 1048576, // show every 1MB 
+					minorTickStep: 102400, // show every 100K
+					maxLabelSize: 50,
+					labelFunc: getDataLabel
+				})).
+				addPlot("default", { 
+					type: "Bars", 
+					minBarSize: 3,
+					maxBarSize: 3,
+					gap: 3
+				}).
+				addSeries("Bandwidth", 
+					dojo.map(testList, "return item.averages.bandwidth;"),
+					{ 
+						stroke: { width: 0 },
+						// [ "#44aa77", "#339966", "#246d49" ],
+						fill: "#44aa77"
+					}
+				).
+			render();
+
+			new dojox.charting.action2d.Tooltip(bandChart, "default", {
+				text: function(o){ 
+					var item = testList[o.index];
+					return "Bandwidth: <b>"+getDataLabel(item.averages.bandwidth)+"</b>";
+				}
+			});
+
+			bandLegend = new dojox.charting.widget.Legend({ chart: bandChart }, "bandLegendNode");
+
+			totalTimeChart = new dojox.charting.Chart2D("totalTimeChartNode").
+				setTheme(DarkHorse).
+				addAxis("x", dojo.delegate(xAxisConfig, { 
+					majorTickStep: 500, // show every 500ms
+					maxLabelSize: 50,
+					labelFunc: getTimeLabel
+				})).
+				addAxis("y", yAxisConfig).
+				addPlot("default", { 
+					type: "Bars", 
+					minBarSize: 3,
+					maxBarSize: 3,
+					gap: 3
+				}).
+				addSeries("Total Test Time", 
+					dojo.map(testList, "return item.averages.total;"),
+					{ 
+						stroke: { width: 0 },
+						fill: "#dd0000" // "#990000"
+					}
+				).
+			render();
+
+			new dojox.charting.action2d.Tooltip(totalTimeChart, "default", {
+				text: function(o){ 
+					var item = testList[o.index];
+					return "Total Test Time: <b>" + getTimeLabel(item.averages.total)+"</b>";
+				}
+			});
+
+			totalTimeLegend = new dojox.charting.widget.Legend(
+				{ chart: totalTimeChart }, 
+				"totalTimeLegendNode"
+			);
+
+			}catch(e){ alert(e); console.error(e); }
+		}
+
+		updateCharts = function(){
+			perfChart.
+				updateSeries("Server Exec Time", 
+					dojo.map(testList, "return item.averages.serverExecTime;")).
+				updateSeries("Transfer Time", 
+					dojo.map(testList, "return item.averages.transferTime;")).
+				updateSeries("Parse Time", 
+					dojo.map(testList, "return item.averages.parseTime;")).
+				updateSeries("Render Time", 
+					dojo.map(testList, "return item.averages.renderTime;")).
+			render();
+			perfLegend.refresh();
+
+			bandChart.
+				updateSeries("Bandwidth", 
+					dojo.map(testList, "return item.averages.bandwidth;")).
+			render();
+			bandLegend.refresh();
+
+			totalTimeChart.
+				updateSeries("Total Test Time", 
+					dojo.map(testList, "return item.averages.total;")).
+			render();
+			totalTimeLegend.refresh();
+		}
+
+		dojo.addOnLoad(function(){
+			$("#testContent").attr("src", "blank.html");
+
+			// get the list of tests and populate things accordingly
+			dojo.xhrGet({
+				url: "tests.json",
+				handleAs: "json",
+				load: setTestList
+			});
+		});
+	</script>
+</head>
+<body class="tundra census">
+	<!-- we use a BorderContainer for the main page layout -->
+	<div dojoType="dijit.layout.BorderContainer" id="main">
+		<!-- 
+			tabs for the left-hand panel. We use CSS to remove the "tab"
+			appearance but since we're using the Dojo tab class, we'll get to
+			keep all of the accessibility behavior and keyboard handling
+		-->
+		<div dojoType="dijit.layout.TabContainer" 
+			tabPosition="top" splitter="true" region="left"
+			style="width: 270px;" class="mainPane leftContainer">
+
+			<!-- the "Guide Me" UI -->
+			<div dojoType="dijit.layout.ContentPane" title="Guide Me"
+				jsId="guideMePane" class="guideMe">
+				<button dojoType="dijit.form.Button" onClick="runSelected(true);" 
+					class="runAllButton">
+					Run 'Em All
+				</button>
+				<br>
+				<button dojoType="dijit.form.Button" class="arrow">
+					<script type="dojo/connect" event="onClick">
+						runSelected();
+						console.debug("run prev");
+						$("#testListDropDown").
+							map("return item.options[Math.max(item.selectedIndex-1, 0)]").
+							attr("selected", true);
+
+						guideMePane.runSelectedTest().
+							addCallback(this, function(){ this.attr("disabled", false); });
+
+						this.attr("disabled", true);
+					</script>
+					&#9668;
+				</button>
+				<select id="testListDropDown" style="width: 150px;">
+					<option value="default">Census - Guide Me</option>
+				</select>
+				<button dojoType="dijit.form.Button" class="arrow">
+					<script type="dojo/connect" event="onClick">
+						$("#testListDropDown").
+							map("return item.options[item.selectedIndex+1]").
+							attr("selected", true);
+
+						guideMePane.runSelectedTest().
+							addCallback(this, function(){ this.attr("disabled", false); });
+
+						this.attr("disabled", true);
+					</script>
+					&#9658;
+				</button>
+				<table style="text-align: right;">
+					<tr><td>Rows:</td>
+						<td>
+							<div dojoType="dijit.form.NumberSpinner"
+								constraints="{ max: 20000, min: 0 }"
+								smallDelta="500"
+								largeDelta="1000"
+								class="testSpinner"
+								style="width: 60px;">
+								<script type="dojo/method">
+									this.attr("value", rowCount);
+								</script>
+								<script type="dojo/connect" event="onChange">
+									rowCount = this.attr("value");
+								</script>
+							</div>
+						</td>
+					</tr>
+					<tr><td>Test Count:</td>
+						<td>
+							<div dojoType="dijit.form.NumberSpinner" constraints="{ max: 100, min: 1 }"
+								class="testSpinner"
+								style="width: 60px;">
+								<script type="dojo/method">
+									this.attr("value", testCount);
+								</script>
+								<script type="dojo/connect" event="onChange">
+									testCount = this.attr("value");
+								</script>
+							</div>
+						</td>
+					</tr>
+				</table>
+				<script type="dojo/method" event="setDefaults">
+					$("#guideTitle").html("\"Guide Me\" Mode");
+					$("#guideDetail").xhr("descriptions/intro.html");
+				</script>
+				<script type="dojo/method">
+					var cp = this;
+					this.setDefaults();
+					// fill in the drop down list of tests
+					dojo.connect("setTestList", function(){
+						dojo.forEach(testList.slice(0).reverse(), function(i){
+							if(i.disabled){ return; }
+							var o = dojo.doc.createElement("option");
+							dojo.attr(o, {
+								innerHTML: i.desc,
+								value: i.file
+							});
+							dojo.place(o, "testListDropDown", "last");
+						});
+					});
+
+					this.runSelectedTest = dojo.hitch($("#testListDropDown")[0], function(){
+						if(this.value == "default"){
+							cp.setDefaults();
+						}
+						var t = testsByFile(this.value)[0];
+						if(!t){ return; }
+						$("#guideTitle").html(t.desc);
+						$("#guideDetail").xhr(t.longDescUrl);
+						return runTests([ t ]); // dojo.Deferred
+					});
+					// when it changes, run the next test and show different summary data
+
+					$("#testListDropDown").connect("onchange", this, "runSelectedTest");
+				</script>
+				<h4 id="guideTitle"></h4>
+				<br>
+				<div id="guideDetail"></div>
+			</div>
+
+			<!-- the "Navigator" UI -->
+			<div dojoType="dijit.layout.ContentPane" title="Navigator" class="tests">
+				<button dojoType="dijit.form.Button" onClick="runSelected();" 
+					class="runAllButton">
+					Run Selected Tests
+				</button>
+				<table class="censusTable" cellspacing="0">
+					<tbody>
+						<tr dojoType="dojox.widget.Iterator" jsId="tests" id="tests">
+							<script type="dojo/connect" event="postCreate">
+								var cb = this.checkbox;
+								dojo.connect(this.domNode, "onclick", function(e){
+									if(!dojo.isDescendant(e.target, cb.domNode)){
+										cb._onClick(e);
+									}
+								});
+
+								if(this.disabled){
+									// ghost disabled items
+									dojo.style(this.domNode, "opacity", 0.5);
+								}
+								this.checkbox.attr("disabled", !!this.disabled);
+							</script>
+							<td class="checkbox" style="width: 20px;" noop="${disabled}">
+								<div dojoType="dijit.form.CheckBox"
+									dojoAttachPoint="checkbox">${file}</div>
+							</td>
+							<td class="name" style="width: 100px;">${name}</td>
+							<td class="desc">${desc}</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<!-- the "Help" UI, loaded externally on demand -->
+			<div dojoType="dijit.layout.ContentPane" 
+				title="Help" id="help" href="help.html">
+			</div>
+		</div>
+
+		<!-- a tab container for the charting and test output UI -->
+		<div dojoType="dijit.layout.TabContainer" attachParent="true" tabPosition="bottom"
+			region="center" class="mainPane">
+
+			<!-- charts -->
+			<div dojoType="dijit.layout.ContentPane"
+				title="Charts" 
+				jsId="chartPane"
+				style="overflow-x: hidden; overflow-y: auto;">
+				<script type="dojo/connect" event="onShow">
+					// console.debug("chartPane.onShow");
+					this._showing = true;
+					this.updateCharts();
+				</script>
+				<script type="dojo/connect" event="onHide">
+					this._showing = false;
+				</script>
+				<script type="dojo/method" event="updateCharts">
+					if(!this._showing){ return; }
+					if(perfChart){ updateCharts(); }
+				</script>
+
+				<div id="perfLegendNode" style="width: 100%; height: 50px;"></div>
+				<div id="perfChartNode" style="width: 100%; height: 350px;"></div>
+				<div id="bandLegendNode" style="width: 100%; height: 50px;"></div>
+				<div id="bandChartNode" style="width: 100%; height: 350px;"></div>
+				<div id="totalTimeLegendNode" style="width: 100%; height: 50px;"></div>
+				<div id="totalTimeChartNode" style="width: 100%; height: 350px;"></div>
+				<script type="dojo/connect" event="resize" args="size">
+					// resize the charts if our outer size changes
+					if(this._resizeTimer){
+						clearTimeout(this._resizeTimer);
+					}
+					if(perfChart && perfChart.resize){
+						// keep the height but change the width
+						this._resizeTimer = setTimeout(function(){
+							perfChart.resize(size.w-10, 350);
+							bandChart.resize(size.w-10, 350);
+							totalTimeChart.resize(size.w-10, 350);
+						}, 100);
+					}
+				</script>
+			</div>
+
+			<!-- the raw data in tabular format -->
+			<textarea style="display: none;" id="dataTemplate">
+				{% for item in list %}
+					{% if item._results|length %}
+					<h4>{{ item.desc }}</h4>
+					<table class="rawData">
+						<thead>
+							<tr>
+								<td colspan="2">Server Time (ms)</td>
+								<td>Transfer (ms)</td>
+								<td>Parse (ms)</td>
+								<td>Render (ms)</td>
+								<td>Bandwidth</td>
+								<td>Total Time (ms)</td>
+							</tr>
+						</thead>
+						<tfoot>
+							<tr>
+								<td>Averages:</td>
+								<td>{{ item.averages.serverExecTime|default:"0" }}</td>
+								<td>{{ item.averages.transferTime|default:"0" }}</td>
+								<td>{{ item.averages.parseTime|default:"0" }}</td>
+								<td>{{ item.averages.renderTime|default:"0" }}</td>
+								<td>{{ item.averages.bandwidth|default:"0"|filesizeformat }}</td>
+								<td>{{ item.averages.total|default:"0" }}</td>
+							</tr>
+						</tfoot>
+						<tbody>
+							{% for r in item._results %}
+							<tr>
+								<td colspan="2">{{ r.serverExecTime|default:"0" }}</td>
+								<td>{{ r.transferTime|default:"0" }}</td>
+								<td>{{ r.parseTime|default:"0" }}</td>
+								<td>{{ r.renderTime|default:"0" }}</td>
+								<td>{{ r.bandwidth|default:"0"|filesizeformat }}</td>
+								<td>{{ r.total|default:"0" }}</td>
+							</tr>
+							{% endfor %}
+						</tbody>
+					</table>
+					{%endif%}
+				{% endfor %}
+				<br><br>
+			</textarea>
+			<div dojoType="dijit.layout.ContentPane" 
+				title="Data"
+				jsId="dataPane"
+				style="padding: 10px; margin; 0px; border: none;">
+				<script type="dojo/connect" event="onShow">
+					this._showing = true;
+					this.updateGrid();
+				</script>
+				<script type="dojo/connect" event="onHide">
+					this._showing = false;
+				</script>
+				<script type="dojo/method" event="updateGrid">
+					if(!this._showing){ return; }
+					var ctx = new dojox.dtl.Context({ list: testList });
+					var tmpl = new dojox.dtl.Template(dojo.byId("dataTemplate").value);
+					this.attr("content", tmpl.render(ctx));
+				</script>
+			</div>
+
+			<!-- notes on how the tests are structured and run -->
+			<div dojoType="dijit.layout.ContentPane" 
+				title="Methodology" href="methodology.html"
+				style="padding: 10px; margin; 0px; border: none;">
+			</div>
+
+			<!-- test output (if any) -->
+			<div dojoType="dijit.layout.ContentPane" 
+				title="Output" jsId="output"
+				style="padding: 0px; margin; 0px; border: none;">
+				<script type="dojo/connect" event="onShow">
+					dojo.place("testContent", this.domNode, "first");
+					dojo.removeClass("testContent", "absTestContent");
+					dojo.addClass("testContent", "relTestContent");
+				</script>
+				<script type="dojo/connect" event="onHide">
+					dojo.place("testContent", dojo.body(), "last");
+					dojo.removeClass("testContent", "relTestContent");
+					dojo.addClass("testContent", "absTestContent");
+				</script>
+				<script type="dojo/connect" event="resize" args="size">
+					// make sure our iframe resizes to fit whatever size we've been given
+					dojo.style("testContent", {
+						width: size.w,
+						height: size.h
+					});
+				</script>
+			</div>
+
+		</div>
+		<div dojoType="dijit.layout.ContentPane" 
+			region="bottom" class="progress">
+			<div dojoType="dijit.ProgressBar" jsId="progress"
+				style="width: 100%; height: 6px;">
+				<script type="dojo/method">
+					dojo.style(this.domNode, "opacity", 0);
+					dojo.removeClass(this.domNode, "dijitProgressBarIndeterminate");
+				</script>
+				<script type="dojo/connect" event="onChange">
+					if(0 == this.progress){
+						dojo.fadeIn({ node: this.domNode, duration: 1000 }).play();
+					}else if(this.progress == this.maximum){
+						dojo.fadeOut({ node: this.domNode, duration: 1000 }).play();
+					}
+				</script>
+				<script type="dojo/method" event="update" args="attributes">
+					// quick method copy + monkey-patch to add animations
+					if(attributes){
+						dojo.mixin(this, attributes);
+					}
+					if(!this._lastPct){
+						this._lastPct = 0;
+					}
+					var tip = this.internalProgress;
+					var percent = 1;
+					this.progress = Math.min(this.progress, this.maximum);
+					percent = this.progress / this.maximum;
+					dijit.setWaiState(tip, "describedby", this.label.id);
+					dijit.setWaiState(tip, "valuenow", this.progress);
+					dijit.setWaiState(tip, "valuemin", 0);
+					dijit.setWaiState(tip, "valuemax", this.maximum);
+					// tip.style.width = (percent * 100) + "%";
+					dojo.anim(tip, {
+						width: { 
+							start: this._lastPct, 
+							end: (percent * 100), 
+							units: "%"
+						}
+					}, 500);
+					this._lastPct = (percent * 100);
+					this.onChange();
+				</script>
+			</div>
+		</div>
+
+	</div>
+	<iframe id="testContent" src="blank.html" class="absTestContent"></iframe>
+</body>
+</html>
+<!--
+vim:noet:ts=4:sw=4:ai:ci:
+-->

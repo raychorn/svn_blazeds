@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Copyright (C) 2007 James Ward
+http://www.jamesward.org
+
+Updated, Alex Russell, 2008
+http://alex.dojotoolkit.org
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+-->
+<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml" 
+	backgroundColor="#FFFFFF"
+	horizontalAlign="center"
+	styleName="plain"
+	applicationComplete="initApp()"
+	frameRate="99">
+
+	<mx:Script>
+	<![CDATA[
+		// FIXME: missing server time!
+
+		import mx.collections.*;
+		import com.adobe.serialization.json.JSON;
+
+		[Bindable]
+		public var rows:Number;
+
+		[Bindable]
+		public var gridData:ArrayCollection;
+
+		private var started:Boolean;
+
+		private function initApp():void {
+			rows = new Number(parameters.rows);
+			ExternalInterface.call("timing.tic", "transferTime");
+			srv.send({ output: "json", count: rows });
+			srv.channelSet.messageAgents[0].addEventListener('acknowledge', loadDone);
+			started = true;
+		}
+
+		private function loadDone(event:Event):void {
+			ExternalInterface.call("timing.toc", "transferTime");
+			ExternalInterface.call("timing.tic", "renderTime");
+		}
+
+		private function done():void {
+			if( started ) {
+				ExternalInterface.call("timing.toc", "renderTime");
+				ExternalInterface.call("timing.report");
+				started = false;
+			}
+		}
+
+		private function handleResult():void {
+			var s:String = srv.lastResult.toString();
+			ExternalInterface.call("timing.size", "bandwidth", s.length);
+			s = s.replace(/\n/g, "");
+			s = s.replace(/\r/g, "");
+			ExternalInterface.call("timing.tic", "parseTime");
+			var decoded:ArrayCollection = new ArrayCollection(JSON.decode(s));
+			ExternalInterface.call("timing.toc", "parseTime");
+			ExternalInterface.call("timing.tic", "renderTime");
+			gridData = decoded;
+		}
+	]]>
+	</mx:Script>
+
+	<mx:HTTPService id="srv" url="data.jsp" resultFormat="text" result="handleResult()"/>
+
+	<mx:DataGrid id="g" width="100%" height="100%" 
+		dataProvider="{gridData}"
+		updateComplete="done()">
+		<mx:columns>
+			<mx:DataGridColumn dataField="id" />
+			<mx:DataGridColumn dataField="age" />
+			<mx:DataGridColumn dataField="class" />
+			<mx:DataGridColumn dataField="education" />
+			<mx:DataGridColumn dataField="maritalStatus" />
+			<mx:DataGridColumn dataField="race" />
+			<mx:DataGridColumn dataField="sex" />
+		</mx:columns>
+	</mx:DataGrid>
+</mx:Application>
+<!--
+vim:ts=4:shiftwidth=4:noet:
+-->

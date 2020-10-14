@@ -1,0 +1,124 @@
+<!--
+Copyright (C) 2007 James Ward
+http://www.jamesward.org
+
+Updated, Alex Russell, 2008
+http://alex.dojotoolkit.org
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+-->
+<html>
+	<head>
+		<link rel="stylesheet" href="resources/main.css" type="text/css">
+		<script type="text/javascript" 
+			src="dojo/dojo/dojo.js"></script>
+		<script type="text/javascript" src="dojo/dojo/cookie.js"></script>
+		<script type="text/javascript" src="resources/timing.js"></script>
+		<script type="text/javascript">
+			dojo.require("dojo.cookie");
+
+			var getXmlDoc = function(url){
+				var ret;
+				dojo.xhrGet({
+					url: url,
+					sync: true,
+					handleAs: "xml",
+					load: function(d, ioArgs){
+						if(dojo.isIE){
+							var rt = String(ioArgs.xhr.responseText);
+							dojo.some([
+								"MSXML2", "Microsoft", "MSXML", "MSXML3", "MSXML4"
+							], function(prefix){
+								try{
+									var dom = new ActiveXObject(prefix + ".XMLDOM");
+									// var dom = new ActiveXObject(prefix + ".DOMDocument.6.0");
+									dom.async = false;
+									dom.loadXML(rt);
+									ret = dom;
+									return true;
+								}catch(e){ /* Not available. Squelch and try next one. */ }
+								return false;
+							});
+						}else{
+							ret = d;
+						}
+					}
+				});
+				return ret;
+			}
+
+			var transformDoc = function(url, xmlDoc){
+				var frag;
+				var xslDoc = getXmlDoc(url);
+				if(dojo.isIE){
+					frag = document.createElement("span");
+					frag.innerHTML = xmlDoc.transformNode(xslDoc);
+				}else{
+					var p = new XSLTProcessor();
+					p.importStylesheet(xslDoc);
+					frag = p.transformToFragment(xmlDoc, document);
+				}
+				return frag;
+			}
+
+			dojo.addOnLoad(function(){
+
+				var url = new dojo._Url(window.location);
+				var rows = 5000;
+				if(url.query){
+					rows = dojo.queryToObject(url.query).rows||rows;
+				}
+				timing.tic("transferTime");
+				dojo.xhrGet({
+					handleAs: "xml",
+					url: "data.jsp",
+					content: {
+						output: "xml",
+						count: rows,
+						start: 0
+					},
+					load: function(doc, ioArgs){
+						try{
+						var data = ioArgs.xhr.responseText;
+						var tt = timing.toc("transferTime");
+
+						var st = parseInt(dojo.cookie("serverExecTime"));
+
+						timing.setTime("serverExecTime", st);
+						timing.setTime("transferTime", tt-st);
+
+						timing.size("bandwidth", data);
+
+						timing.tic("parseTime");
+						var frag = transformDoc("table.xsl", doc);
+						timing.toc("parseTime");
+
+						timing.tic("renderTime");
+						dojo.byId("grid").appendChild(frag);
+						// dojo.byId("grid").innerHTML = frag.innerHTML;
+						timing.toc("renderTime");
+
+						timing.report();
+						}catch(e){ console.debug(e); }
+					}
+				});
+			});
+		</script>
+	</head>
+	<body>
+		<div id="grid">
+		</div>
+	</body>
+</html>

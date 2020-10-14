@@ -1,0 +1,406 @@
+html, body, #main {
+	width: 100%;	/* make the body expand to fill the visible window */
+	height: 100%;
+	overflow: hidden;	/* erase window level scrollbars */
+	padding: 0;
+	margin: 0;
+}
+
+body, #main {
+	color: #a9a9a9;
+	background-color: black;
+}
+
+#main { 
+	padding: 10px;
+}
+
+a {
+	color: #dfdfdf;
+}
+
+.census .mainPane {
+	background-color: #1a1a1a;
+	padding: 10px;
+	border: 1px solid #2a2a2a;
+
+	-moz-border-radius-bottomleft: 3px;
+	-webkit-border-bottom-left-radius: 3px;
+	-moz-border-radius-bottomright: 3px;
+	-webkit-border-bottom-right-radius: 3px;
+
+}
+
+.census .progress {
+	background-color: #1a1a1a;
+	padding: 1px;
+	overflow: hidden;
+	border: 1px solid #2a2a2a;
+
+	-moz-border-radius: 6px;
+	-webkit-border-radius: 6px;
+}
+
+.census .dijitProgressBarEmpty {
+	background-color: #1a1a1a;
+	background-image: none;
+}
+
+.census .dijitProgressBarFull {
+	border-right: none;	
+}
+
+.census .dijitProgressBarTile {
+	height: 6px;
+	-moz-border-radius: 3px;
+}
+
+.dj_safari .census .dijitProgressBarTile {
+	-webkit-border-radius: 3px;
+	background: -webkit-gradient(linear, 0% 30%, 0% 100%, from(#d5d5d5), to(#464646));
+	-webkit-background-origin: border;
+	-webkit-background-clip: border;
+}
+
+.census .dijitProgressBarLabel {
+	display: none;
+}
+
+.census .dijitProgressBar {
+	border: 1px solid #1a1a1a;
+	-moz-border-radius: 3px;
+	-webkit-border-radius: 3px;
+}
+
+.census .dijitProgressBarIndeterminateHighContrastImage {
+	display: none;
+}
+
+.census .leftContainer .dijitTabPane {
+	font-size: 1em;
+	line-height: 1.2em;
+	background-color: #151515;
+	border: 1px solid #111111;
+}
+
+.census .dijitTabContainerTop-tabs,
+.census .dijitTabContainerBottom-tabs
+{
+	background-color: #1a1a1a;
+	/* border-color: #434343; */
+	border-color: #2a2a2a;
+}
+
+.census .dijitContentPane {
+	background-color: #1a1a1a;
+}
+
+.census .dijitTab {
+	font-size: 1.2em;
+	line-height: 1.4em;
+	background: transparent none;
+	border: 0px;
+	/*
+	font-weight: bold;
+	*/
+	color: #434343;
+}
+
+.census .dijitTabChecked {
+	color: #b8b8b8;
+}
+
+.census .dijitTabPaneWrapper {
+	background: transparent none;
+	border: none;
+}
+
+.census .dijitTabSpacer {
+	display: none;
+}
+
+.census .dijitSplitter,
+.census .dijitSplitterV .dijitSplitterThumb {
+	width: 3px;
+	background: black none;
+}
+
+.census .dijitSplitterV .dijitSplitterThumb {
+	background-image: none;
+}
+
+
+.census .dijitGutterH {
+	background: black none;
+}
+
+.censusTable {
+	width: 100%;
+	table-layout: fixed;
+	background-color: #151515;
+}
+
+.censusTable td {
+	font-size: 0.8em;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	margin: 0px;
+	padding: 2px;
+}
+
+.censusTable td.name{
+	font-weight: bold;
+}
+
+.censusTrNormal,
+.censusTable tr {
+	/*
+	background-color: #1a1a1a;
+	*/
+}
+
+.censusTrHover,
+.censusTable tr:hover {
+	background-color: #363636;
+}
+
+.census .dojoxLegendNode {
+	padding-left: 4em;
+}
+
+.census .dojoxLegendText {
+	padding-right: 1em;
+	font-size: 1.1em;
+}
+
+.census .dijitFocusedLabel,
+.census .tabLabel {
+	outline: none;
+}
+
+.census .dijitTabContainerTop-tabs .dijitTabCheckedFocused {
+	background-color: #151515;
+	border-left: 1px solid #2a2a2a;
+	border-top: 1px solid #2a2a2a;
+	border-right: 1px solid #2a2a2a;
+	margin: -2px 2px -1px 0px;
+	-moz-border-radius-topleft: 4px;
+	-webkit-border-top-left-radius: 4px;
+	-moz-border-radius-topright: 4px;
+	-webkit-border-top-right-radius: 4px;
+}
+
+.census .dijitTabContainerBottom-tabs .dijitTabCheckedFocused {
+	background-color: #151515;
+	border-left: 1px solid #2a2a2a;
+	border-bottom: 1px solid #2a2a2a;
+	border-right: 1px solid #2a2a2a;
+	margin: -2px 2px -1px 0px;
+	-moz-border-radius-bottomleft: 4px;
+	-webkit-border-bottom-left-radius: 4px;
+	-moz-border-radius-bottomright: 4px;
+	-webkit-border-bottom-right-radius: 4px;
+}
+
+.census .dijitTooltipConnector {
+	display: none;
+}
+
+.census .dijitTooltipContainer {
+	background: #363636;
+	border: 1px solid #2a2a2a;
+	color: #a9a9a9;
+	font-size: normal;
+	/* border: 1px solid black; */
+	/* border: 1px solid #a9a9a9; */
+	-moz-border-radius: 4px;
+}
+
+.dj_safari .census .dijitTooltipContainer {
+	-webkit-border-radius: 4px;
+	/* background: -webkit-gradient(linear, left top, left bottom, from(#363636), to(#151515)); */
+	background: -webkit-gradient(linear, 0% 20%, left bottom, from(#2c2c2c), to(#151515));
+	-webkit-background-origin: border;
+	-webkit-background-clip: border;
+}
+
+.census .dijitTooltipContainer td {
+	padding: 3px 3px 1px 3px;
+}
+
+.census .dijitTooltipLeft {
+	padding-right: 3px;
+}
+
+.census .dijitTooltipRight {
+	padding-left: 3px;
+}
+
+.relTestContent {
+	padding: 0px;
+	margin; 0px;
+	border: none;
+	min-width: 100px;
+	min-height: 100px;
+	width: 100%;
+	height: 100%;
+}
+
+.absTestContent {
+	position: absolute;
+	left: -1000px;
+	top: -100px;
+	width: 600px;
+	height: 600px;
+	padding: 0px;
+	margin; 0px;
+	border: none;
+	min-width: 100px;
+	min-height: 100px;
+}
+
+#guideDetail p {
+	font-size: 0.9em;
+}
+
+table.rawData {
+	margin: 0px;
+	padding: 0px;
+	border-collapse: collapse;
+	margin-top: 15px;
+}
+
+table.rawData td {
+	padding-top: 10px;
+	padding-right: 10px;
+	padding-bottom: 4px;
+	border-right: 1px solid #2a2a2a;
+}
+
+table.rawData td.odd {
+	background-color: #151515;
+}
+
+table.rawData thead td,
+table.rawData tfoot td {
+	background-color: #2a2a2a;
+	padding: 4px;
+	padding-top: 4px;
+}
+
+table.rawData tbody td,
+table.rawData tfoot td {
+	text-align: right;
+	padding-right: 10px;
+}
+
+.census .testSpinner {
+	background-image: none;
+	background-color: #b8b8b8;
+	border: 1px solid #434343; /* #2a2a2a; */
+}
+
+/*
+.census .dijitSpinner,
+.census .dijitProgressBarFull,
+.census .dijitProgressBarEmpty {
+	background: none;
+	background-image: none;
+}
+*/
+
+.census .testSpinner .dijitSpinnerButtonContainer {
+	width: 12px;
+	background: none;
+	background-image: none;
+}
+
+.census .testSpinner .dijitButtonNode {
+	border-width: 0px;
+	width: 12px;
+	background: none;
+	background-image: none;
+}
+
+.census .testSpinner input {
+	color: #b8b8b8;
+	border: none;
+}
+
+/* we won't have invalid values */
+.census .testSpinner .dijitValidationIcon {
+	display: none;
+}
+
+.census .testSpinner .dijitInputField {
+	background-color: #2a2a2a;
+	background-image: none;
+}
+
+code {
+	background: black;
+	border: none;
+	font-size: 0.9em;
+}
+
+.census .arrow {
+	font-family: "Webdings 3";
+	font-size: 1.5em;
+	border: none;
+	background-image: none;
+}
+
+.census .arrow .dijitButton,
+.census .arrow .dijitButtonNode,
+.census .arrow .dijitButtonNode button {
+	color: #b8b8b8;
+	border: none;
+	padding: 0px;
+	margin: 0px;
+	background-image: none;
+	background-color: transparent;
+}
+
+.census .arrow .dijitButtonHover {
+	color: #b8b8b8;
+}
+
+.census .arrow .dijitButtonText {
+	padding: 0px;
+}
+
+
+.census .runAllButton {
+	color: #b8b8b8;
+	font-size: 1.2em;
+	width: 90%;
+	background-image: none;
+}
+
+.census .runAllButton .dijitButton,
+.census .runAllButton .dijitButtonNode,
+.census .runAllButton .dijitButtonNode button {
+	color: #b8b8b8;
+	border: none;
+	background-image: none;
+	background-color: transparent;
+}
+
+/* FIXME: need to get hover color set right */
+.census .guideMe .dijitButtonHover .dijitButtonNode {
+	background-color: transparent;
+	color: inherit;
+}
+
+.census .guideMe .dijitButtonHover {
+	background-color: #363636;
+	color: #b8b8b8;
+}
+
+.census select {
+	border: 1px solid #b8b8b8;
+	border: 1px solid #1a1a1a;
+	color: #b8b8b8;
+	background-color: #363636;
+}

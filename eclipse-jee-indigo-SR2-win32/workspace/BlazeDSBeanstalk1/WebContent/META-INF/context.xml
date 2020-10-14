@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Context reloadable="true">
+  <Transaction factory="org.objectweb.jotm.UserTransactionFactory" jotm.timeout="60"/>
+</Context>
